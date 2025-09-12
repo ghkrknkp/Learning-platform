@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Self-Introduction Practice</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(to right, #6a11cb, #2575fc);
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 28px;
+        }
+        p {
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        button {
+            font-size: 16px;
+            padding: 10px 20px;
+            margin: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #startBtn {
+            background-color: orange;
+            color: white;
+        }
+        #stopBtn {
+            background-color: red;
+            color: white;
+        }
+        #audioPlayer {
+            width: 100%;
+            margin-top: 10px;
+        }
+        #feedback {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Practice Your Self-Introduction</h1>
+    <p>Click the button below to record your introduction. After submission, you'll receive feedback on pronunciation, fluency, and confidence.</p>
+    
+    <button id="startBtn">🎤 Start Recording</button>
+    <button id="stopBtn" disabled>⏹ Stop & Submit</button>
+    
+    <audio id="audioPlayer" controls></audio>
+    
+    <p id="feedback">Feedback will appear here...</p>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+
+        document.getElementById("startBtn").addEventListener("click", startRecording);
+        document.getElementById("stopBtn").addEventListener("click", stopRecording);
+
+        async function startRecording() {
+            console.log("Start button clicked!");
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    document.getElementById("audioPlayer").src = audioUrl;
+                    uploadAudio(audioBlob);
+                };
+
+                mediaRecorder.start();
+                document.getElementById("startBtn").disabled = true;
+                document.getElementById("stopBtn").disabled = false;
+                console.log("Recording started...");
+            } catch (error) {
+                console.error("Microphone access error:", error);
+                alert("Error accessing the microphone. Please allow microphone access in your browser settings.");
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                document.getElementById("startBtn").disabled = false;
+                document.getElementById("stopBtn").disabled = true;
+                console.log("Recording stopped.");
+            }
+        }
+
+        async function uploadAudio(audioBlob) {
+            const API_KEY = ""; // Replace with your actual OpenAI API key
+            const API_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions";
+
+            let formData = new FormData();
+            formData.append("file", audioBlob, "audio.webm");
+            formData.append("model", "whisper-1");
+
+            try {
+                let response = await fetch(API_ENDPOINT, {
+                    method: "POST",
+                    headers: { "Authorization": Bearer ${API_KEY} },
+                    body: formData
+                });
+
+                let data = await response.json();
+                console.log("Whisper API Response:", data);
+
+                if (data.text) {
+                    analyzeTextFeedback(data.text);
+                } else {
+                    document.getElementById("feedback").innerText = "Failed to transcribe audio.";
+                }
+            } catch (error) {
+                console.error("Whisper API Request Failed:", error);
+                document.getElementById("feedback").innerText = "Error processing audio.";
+            }
+        }
+
+        async function analyzeTextFeedback(text) {
+            const API_KEY = "api key"; // Replace with your actual key
+            const GPT_ENDPOINT = "https://api.openai.com/v1/chat/completions";
+
+            let requestBody = {
+                model: "gpt-4",
+                messages: [{ role: "user", content: Analyze this self-introduction and give feedback: ${text} }],
+                max_tokens: 100
+            };
+
+            try {
+                let response = await fetch(GPT_ENDPOINT, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": Bearer ${API_KEY},
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                let data = await response.json();
+                console.log("GPT API Response:", data);
+
+                if (data.choices && data.choices.length > 0) {
+                    document.getElementById("feedback").innerText = data.choices[0].message.content;
+                } else {
+                    document.getElementById("feedback").innerText = "Could not generate feedback.";
+                }
+            } catch (error) {
+                console.error("GPT API Request Failed:", error);
+                document.getElementById("feedback").innerText = "Error processing feedback.";
+            }
+        }
+    </script>
+</body>
+</html>
